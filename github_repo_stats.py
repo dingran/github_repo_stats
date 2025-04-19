@@ -40,9 +40,10 @@ def clone_repository(url, temp_dir):
         return False
 
 
-def get_language_stats(repo_dir, verbose=False):
+def get_language_stats(repo_dir, verbose=False, include_docs=False):
     """Calculate lines of code statistics by language."""
-    language_extensions = {
+    # Define code and documentation file extensions
+    code_extensions = {
         '.py': 'Python',
         '.js': 'JavaScript',
         '.jsx': 'JavaScript',
@@ -63,12 +64,23 @@ def get_language_stats(repo_dir, verbose=False):
         '.kt': 'Kotlin',
         '.rs': 'Rust',
         '.sh': 'Shell',
-        '.md': 'Markdown',
         '.json': 'JSON',
         '.xml': 'XML',
         '.yml': 'YAML',
         '.yaml': 'YAML',
     }
+    
+    # Define documentation file extensions
+    doc_extensions = {
+        '.md': 'Markdown',
+        '.rst': 'ReStructuredText',
+        '.txt': 'Text',
+    }
+    
+    # Combine extensions based on user preference
+    language_extensions = code_extensions.copy()
+    if include_docs:
+        language_extensions.update(doc_extensions)
     
     # Define directories to exclude
     exclude_dirs = {'.git', 'node_modules', 'venv', 'env', '__pycache__', 'dist', 'build'}
@@ -148,10 +160,13 @@ def main():
     parser.add_argument("repo_url", help="GitHub repository URL")
     parser.add_argument("-v", "--verbose", action="store_true", 
                         help="Display detailed breakdown by files for each language")
+    parser.add_argument("-d", "--include-docs", action="store_true",
+                        help="Include documentation files (Markdown, RST, etc.) in the analysis")
     args = parser.parse_args()
     
     repo_url = args.repo_url
     verbose = args.verbose
+    include_docs = args.include_docs
     
     # Remove @ prefix if present (from example)
     if repo_url.startswith('@'):
@@ -172,10 +187,10 @@ def main():
         
         print("Analyzing code statistics...")
         if verbose:
-            stats, total_lines, file_stats = get_language_stats(temp_dir, verbose=True)
+            stats, total_lines, file_stats = get_language_stats(temp_dir, verbose=True, include_docs=include_docs)
             print_stats(repo_url, stats, total_lines, verbose=True, file_stats=file_stats)
         else:
-            stats, total_lines = get_language_stats(temp_dir)
+            stats, total_lines = get_language_stats(temp_dir, include_docs=include_docs)
             print_stats(repo_url, stats, total_lines)
         
     finally:

@@ -31,6 +31,20 @@ or
 ./github_repo_stats.py --verbose https://github.com/username/repo
 ```
 
+Include documentation files (Markdown, RST, etc.):
+```bash
+./github_repo_stats.py -d https://github.com/username/repo
+```
+or
+```bash
+./github_repo_stats.py --include-docs https://github.com/username/repo
+```
+
+You can combine options:
+```bash
+./github_repo_stats.py -v -d https://github.com/username/repo
+```
+
 Example:
 
 ```bash
@@ -44,6 +58,7 @@ Example:
 - Calculates lines of code statistics by language
 - Displays statistics in a clear, formatted output
 - Provides verbose mode with file-by-file breakdown of each language
+- Option to include or exclude documentation files (excluded by default)
 - Cleans up the temporary repository after analysis
 - Handles common error cases gracefully
 
