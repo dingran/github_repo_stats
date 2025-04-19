@@ -6,6 +6,7 @@ import subprocess
 import shutil
 import tempfile
 import re
+import fnmatch
 from urllib.parse import urlparse
 from collections import defaultdict
 import argparse
@@ -27,6 +28,11 @@ def validate_github_url(url):
     return True
 
 
+def is_local_path(path):
+    """Check if the provided path is a local directory."""
+    return os.path.isdir(path)
+
+
 def clone_repository(url, temp_dir):
     """Clone the GitHub repository to a temporary directory."""
     try:
@@ -40,7 +46,21 @@ def clone_repository(url, temp_dir):
         return False
 
 
-def get_language_stats(repo_dir, verbose=False, include_docs=False):
+def should_exclude_path(path, exclude_patterns, repo_dir):
+    """Check if a path should be excluded based on patterns."""
+    if not exclude_patterns:
+        return False
+    
+    rel_path = os.path.relpath(path, repo_dir)
+    
+    for pattern in exclude_patterns:
+        if fnmatch.fnmatch(rel_path, pattern):
+            return True
+    
+    return False
+
+
+def get_language_stats(repo_dir, verbose=False, include_docs=False, exclude_patterns=None):
     """Calculate lines of code statistics by language."""
     # Define code and documentation file extensions
     code_extensions = {
@@ -92,10 +112,15 @@ def get_language_stats(repo_dir, verbose=False, include_docs=False):
     
     for root, dirs, files in os.walk(repo_dir):
         # Skip excluded directories
-        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        dirs[:] = [d for d in dirs if d not in exclude_dirs and not should_exclude_path(os.path.join(root, d), exclude_patterns, repo_dir)]
         
         for file in files:
             file_path = os.path.join(root, file)
+            
+            # Skip excluded files
+            if should_exclude_path(file_path, exclude_patterns, repo_dir):
+                continue
+                
             _, ext = os.path.splitext(file)
             
             if ext in language_extensions:
@@ -119,11 +144,14 @@ def get_language_stats(repo_dir, verbose=False, include_docs=False):
     return stats, total_lines
 
 
-def print_stats(repo_url, stats, total_lines, verbose=False, file_stats=None):
+def print_stats(repo_path, stats, total_lines, verbose=False, file_stats=None, is_local=False):
     """Print the statistics in a formatted way."""
-    # Extract repo name from URL
-    repo_name = repo_url.rstrip('/').split('/')[-2:]
-    repo_name = '/'.join(repo_name)
+    # Extract repo name from URL or use the directory name for local paths
+    if is_local:
+        repo_name = os.path.basename(os.path.abspath(repo_path))
+    else:
+        repo_name = repo_path.rstrip('/').split('/')[-2:]
+        repo_name = '/'.join(repo_name)
     
     print(f"\nRepository: {repo_name}")
     print(f"Total Lines of Code: {total_lines:,}")
@@ -157,46 +185,83 @@ def print_stats(repo_url, stats, total_lines, verbose=False, file_stats=None):
 
 def main():
     parser = argparse.ArgumentParser(description="Analyze GitHub repository for code statistics")
-    parser.add_argument("repo_url", help="GitHub repository URL")
+    parser.add_argument("repo_path", help="GitHub repository URL or local directory path")
     parser.add_argument("-v", "--verbose", action="store_true", 
                         help="Display detailed breakdown by files for each language")
     parser.add_argument("-d", "--include-docs", action="store_true",
                         help="Include documentation files (Markdown, RST, etc.) in the analysis")
+    parser.add_argument("-e", "--exclude", action="append", 
+                        help="Exclude files/directories matching these patterns (can be used multiple times)")
+    parser.add_argument("-l", "--local", action="store_true",
+                        help="Analyze local directory instead of GitHub repository URL")
     args = parser.parse_args()
     
-    repo_url = args.repo_url
+    repo_path = args.repo_path
     verbose = args.verbose
     include_docs = args.include_docs
+    exclude_patterns = args.exclude
+    is_local = args.local
     
-    # Remove @ prefix if present (from example)
-    if repo_url.startswith('@'):
-        repo_url = repo_url[1:]
-    
-    # Validate URL
-    if not validate_github_url(repo_url):
-        print("Error: Invalid GitHub repository URL")
-        sys.exit(1)
-    
-    # Create a temporary directory
-    temp_dir = tempfile.mkdtemp()
-    
-    try:
-        print(f"Cloning repository {repo_url}...")
-        if not clone_repository(repo_url, temp_dir):
+    # Determine if it's a local path or if user explicitly specified local mode
+    if is_local or is_local_path(repo_path):
+        is_local = True  # Set to true if either flag is true or path is local
+        
+        if not os.path.isdir(repo_path):
+            print(f"Error: The specified path '{repo_path}' is not a directory")
+            sys.exit(1)
+            
+        print(f"Analyzing local directory: {repo_path}")
+        
+        stats_args = {
+            'verbose': verbose,
+            'include_docs': include_docs,
+            'exclude_patterns': exclude_patterns
+        }
+        
+        if verbose:
+            stats, total_lines, file_stats = get_language_stats(repo_path, **stats_args)
+            print_stats(repo_path, stats, total_lines, verbose=True, file_stats=file_stats, is_local=True)
+        else:
+            stats, total_lines = get_language_stats(repo_path, **stats_args)
+            print_stats(repo_path, stats, total_lines, is_local=True)
+            
+    else:
+        # Remove @ prefix if present (from example)
+        if repo_path.startswith('@'):
+            repo_path = repo_path[1:]
+        
+        # Validate URL
+        if not validate_github_url(repo_path):
+            print("Error: Invalid GitHub repository URL")
             sys.exit(1)
         
-        print("Analyzing code statistics...")
-        if verbose:
-            stats, total_lines, file_stats = get_language_stats(temp_dir, verbose=True, include_docs=include_docs)
-            print_stats(repo_url, stats, total_lines, verbose=True, file_stats=file_stats)
-        else:
-            stats, total_lines = get_language_stats(temp_dir, include_docs=include_docs)
-            print_stats(repo_url, stats, total_lines)
+        # Create a temporary directory
+        temp_dir = tempfile.mkdtemp()
         
-    finally:
-        # Clean up the temporary directory
-        print(f"\nCleaning up temporary files...")
-        shutil.rmtree(temp_dir, ignore_errors=True)
+        try:
+            print(f"Cloning repository {repo_path}...")
+            if not clone_repository(repo_path, temp_dir):
+                sys.exit(1)
+            
+            print("Analyzing code statistics...")
+            
+            stats_args = {
+                'verbose': verbose,
+                'include_docs': include_docs,
+                'exclude_patterns': exclude_patterns
+            }
+            
+            if verbose:
+                stats, total_lines, file_stats = get_language_stats(temp_dir, **stats_args)
+                print_stats(repo_path, stats, total_lines, verbose=True, file_stats=file_stats)
+            else:
+                stats, total_lines = get_language_stats(temp_dir, **stats_args)
+                print_stats(repo_path, stats, total_lines)
+            
+        finally:
+            # Clean up the temporary directory
+            print(f"\nCleaning up temporary files...")
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 if __name__ == "__main__":

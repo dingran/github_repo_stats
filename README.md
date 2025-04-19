@@ -1,6 +1,6 @@
 # GitHub Repository Statistics
 
-A command line tool that analyzes GitHub repositories to provide statistics about lines of code, broken down by programming language.
+A command line tool that analyzes GitHub repositories or local code directories to provide statistics about lines of code, broken down by programming language.
 
 ## Installation
 
@@ -13,14 +13,30 @@ chmod +x github_repo_stats.py
 ## Requirements
 
 - Python 3.6+
-- Git command line tool installed and available in PATH
+- Git command line tool installed and available in PATH (only needed for GitHub repository analysis)
 
 ## Usage
+
+### Analyzing GitHub Repositories
 
 Basic usage:
 ```bash
 ./github_repo_stats.py https://github.com/username/repo
 ```
+
+### Analyzing Local Directories
+
+For local repositories or code directories:
+```bash
+./github_repo_stats.py /path/to/your/code
+```
+
+Or explicitly specify the local flag:
+```bash
+./github_repo_stats.py -l /path/to/your/code
+```
+
+### Options
 
 Verbose mode (shows breakdown by filenames):
 ```bash
@@ -40,26 +56,40 @@ or
 ./github_repo_stats.py --include-docs https://github.com/username/repo
 ```
 
-You can combine options:
+Exclude specific files or directories (using glob patterns):
 ```bash
-./github_repo_stats.py -v -d https://github.com/username/repo
+./github_repo_stats.py -e "src/test/*" https://github.com/username/repo
+```
+or
+```bash
+./github_repo_stats.py --exclude "src/test/*" https://github.com/username/repo
 ```
 
-Example:
-
+You can specify multiple exclusion patterns:
 ```bash
-./github_repo_stats.py https://github.com/dingran/web_reader
+./github_repo_stats.py -e "src/test/*" -e "*.min.js" https://github.com/username/repo
+```
+
+You can combine all options:
+```bash
+./github_repo_stats.py -v -d -e "src/test/*" https://github.com/username/repo
+```
+
+Local directory example:
+```bash
+./github_repo_stats.py -v -e "node_modules/*" ~/projects/my-app
 ```
 
 ## Features
 
-- Accepts a GitHub repository URL as input
-- Clones the repository locally to a temporary directory
+- Accepts a GitHub repository URL or local directory path as input
+- Clones GitHub repositories to a temporary directory (if needed)
 - Calculates lines of code statistics by language
 - Displays statistics in a clear, formatted output
 - Provides verbose mode with file-by-file breakdown of each language
 - Option to include or exclude documentation files (excluded by default)
-- Cleans up the temporary repository after analysis
+- Option to exclude specific files or directories using glob patterns
+- Cleans up temporary repositories after analysis
 - Handles common error cases gracefully
 
 ## Output Example
