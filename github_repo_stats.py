@@ -9,6 +9,7 @@ import re
 import fnmatch
 from urllib.parse import urlparse
 from collections import defaultdict
+import pathspec
 import argparse
 
 
@@ -46,21 +47,42 @@ def clone_repository(url, temp_dir):
         return False
 
 
-def should_exclude_path(path, exclude_patterns, repo_dir):
-    """Check if a path should be excluded based on patterns."""
-    if not exclude_patterns:
-        return False
+def parse_gitignore(repo_dir):
+    """Parse .gitignore file and return a pathspec object."""
+    gitignore_path = os.path.join(repo_dir, '.gitignore')
     
-    rel_path = os.path.relpath(path, repo_dir)
+    if not os.path.exists(gitignore_path):
+        return None
     
-    for pattern in exclude_patterns:
-        if fnmatch.fnmatch(rel_path, pattern):
+    with open(gitignore_path, 'r', encoding='utf-8', errors='ignore') as f:
+        gitignore_content = f.read()
+    
+    # Parse the gitignore content
+    return pathspec.PathSpec.from_lines(
+        pathspec.patterns.GitWildMatchPattern, 
+        gitignore_content.splitlines()
+    )
+
+
+def should_exclude_path(path, exclude_patterns, repo_dir, gitignore_spec=None):
+    """Check if a path should be excluded based on patterns or gitignore rules."""
+    # First, check if path is excluded by explicit patterns
+    if exclude_patterns:
+        rel_path = os.path.relpath(path, repo_dir)
+        for pattern in exclude_patterns:
+            if fnmatch.fnmatch(rel_path, pattern):
+                return True
+    
+    # Then, check if path is excluded by gitignore rules
+    if gitignore_spec:
+        rel_path = os.path.relpath(path, repo_dir)
+        if gitignore_spec.match_file(rel_path):
             return True
     
     return False
 
 
-def get_language_stats(repo_dir, verbose=False, include_docs=False, exclude_patterns=None):
+def get_language_stats(repo_dir, verbose=False, include_docs=False, exclude_patterns=None, respect_gitignore=True):
     """Calculate lines of code statistics by language."""
     # Define code and documentation file extensions
     code_extensions = {
@@ -105,6 +127,13 @@ def get_language_stats(repo_dir, verbose=False, include_docs=False, exclude_patt
     # Define directories to exclude
     exclude_dirs = {'.git', 'node_modules', 'venv', 'env', '__pycache__', 'dist', 'build'}
     
+    # Parse .gitignore if present and requested
+    gitignore_spec = None
+    if respect_gitignore:
+        gitignore_spec = parse_gitignore(repo_dir)
+        if gitignore_spec:
+            print("Using .gitignore rules to exclude files")
+    
     # Stats collection
     stats = defaultdict(int)
     total_lines = 0
@@ -112,13 +141,18 @@ def get_language_stats(repo_dir, verbose=False, include_docs=False, exclude_patt
     
     for root, dirs, files in os.walk(repo_dir):
         # Skip excluded directories
-        dirs[:] = [d for d in dirs if d not in exclude_dirs and not should_exclude_path(os.path.join(root, d), exclude_patterns, repo_dir)]
+        dirs[:] = [
+            d for d in dirs if (
+                d not in exclude_dirs and 
+                not should_exclude_path(os.path.join(root, d), exclude_patterns, repo_dir, gitignore_spec)
+            )
+        ]
         
         for file in files:
             file_path = os.path.join(root, file)
             
             # Skip excluded files
-            if should_exclude_path(file_path, exclude_patterns, repo_dir):
+            if should_exclude_path(file_path, exclude_patterns, repo_dir, gitignore_spec):
                 continue
                 
             _, ext = os.path.splitext(file)
@@ -194,6 +228,8 @@ def main():
                         help="Exclude files/directories matching these patterns (can be used multiple times)")
     parser.add_argument("-l", "--local", action="store_true",
                         help="Analyze local directory instead of GitHub repository URL")
+    parser.add_argument("--no-gitignore", action="store_true",
+                        help="Don't respect .gitignore rules when analyzing local repositories")
     args = parser.parse_args()
     
     repo_path = args.repo_path
@@ -201,6 +237,7 @@ def main():
     include_docs = args.include_docs
     exclude_patterns = args.exclude
     is_local = args.local
+    respect_gitignore = not args.no_gitignore
     
     # Determine if it's a local path or if user explicitly specified local mode
     if is_local or is_local_path(repo_path):
@@ -215,7 +252,8 @@ def main():
         stats_args = {
             'verbose': verbose,
             'include_docs': include_docs,
-            'exclude_patterns': exclude_patterns
+            'exclude_patterns': exclude_patterns,
+            'respect_gitignore': respect_gitignore
         }
         
         if verbose:
@@ -248,7 +286,8 @@ def main():
             stats_args = {
                 'verbose': verbose,
                 'include_docs': include_docs,
-                'exclude_patterns': exclude_patterns
+                'exclude_patterns': exclude_patterns,
+                'respect_gitignore': respect_gitignore
             }
             
             if verbose:

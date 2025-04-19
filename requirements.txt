@@ -1,0 +1,2 @@
+# GitHub Repository Statistics - Dependencies
+pathspec>=0.12.1    # For parsing and matching .gitignore patterns 

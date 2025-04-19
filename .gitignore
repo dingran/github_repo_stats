@@ -50,6 +50,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+github_repo_stats_venv/
 
 # OS specific files
 .DS_Store

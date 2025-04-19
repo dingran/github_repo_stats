@@ -4,10 +4,22 @@ A command line tool that analyzes GitHub repositories or local code directories 
 
 ## Installation
 
-No installation necessary, just make sure the script is executable:
+1. Clone the repository:
+```bash
+git clone https://github.com/dingran/github_repo_stats.git
+cd github_repo_stats
+```
 
+2. Make the script executable:
 ```bash
 chmod +x github_repo_stats.py
+```
+
+3. Set up virtual environment and install dependencies:
+```bash
+python3 -m venv github_repo_stats_venv
+source github_repo_stats_venv/bin/activate  # On Windows: github_repo_stats_venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
 ## Requirements
@@ -65,6 +77,11 @@ or
 ./github_repo_stats.py --exclude "src/test/*" https://github.com/username/repo
 ```
 
+Disable .gitignore rules (by default .gitignore rules are respected):
+```bash
+./github_repo_stats.py -l --no-gitignore ~/projects/my-repo
+```
+
 You can specify multiple exclusion patterns:
 ```bash
 ./github_repo_stats.py -e "src/test/*" -e "*.min.js" https://github.com/username/repo
@@ -86,6 +103,7 @@ Local directory example:
 - Clones GitHub repositories to a temporary directory (if needed)
 - Calculates lines of code statistics by language
 - Displays statistics in a clear, formatted output
+- Respects .gitignore rules when analyzing local repositories
 - Provides verbose mode with file-by-file breakdown of each language
 - Option to include or exclude documentation files (excluded by default)
 - Option to exclude specific files or directories using glob patterns
